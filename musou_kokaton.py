@@ -8,7 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 650  # ゲームウィンドウの高さ
-backgroundImg = ["fig/pg_bg.jpg","fig/pg_bg2.jpg","fig/pg_bg3.jpg","fig/pg_bg4.jpg","fig/pg_bg5.jpg"] #1,2,3,4,5
+backgroundImg = ["fig/pg_bg.jpg","fig/starnight3.jpg","fig/pg_bg3.jpg","fig/pg_bg4.jpg","fig/pg_bg5.jpg"] #1,2,3,4,5
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -287,6 +287,42 @@ class Enemy(pg.sprite.Sprite):
             self.state = "stop"
         self.rect.move_ip(self.vx, self.vy)
 
+class Enemy2(pg.sprite.Sprite):
+    """
+    ステージ2の敵機に関するクラス
+    """
+    imgs = [pg.image.load(f"fig/ufo_0{i}.png") for i in range(1, 4)]
+    
+    def __init__(self):
+        super().__init__()
+        self.image = pg.transform.rotozoom(random.choice(__class__.imgs), 0, 0.2)
+        self.rect = self.image.get_rect()
+        self.rect.center = WIDTH + self.rect.width // 2, random.randint(50, HEIGHT - 150)
+        self.vx, self.vy = random.randint(-6, -1), random.randint(-1, 1)
+        self.change_dir_timer = random.randint(20, 50)
+        self.bound = random.randint(WIDTH // 2, WIDTH - 150)  # 停止位置
+        self.state = "left"  # 左移動状態or停止状態
+        self.interval = random.randint(20, 60)  # 爆弾投下インターバル
+        self.hp = 1
+
+    def update(self):
+        """
+        敵機を速度ベクトルself.vxに基づき移動（左移動）させる
+        ランダムに決めた停止位置_boundまで左移動したら，_stateを停止状態に変更する
+        引数 screen：画面Surface
+        """
+        self.change_dir_timer -= 1 # 毎フレームタイマーを減らす
+        
+        # タイマーが0になったら、新しい速度をランダムに決めてタイマーをリセット
+        if self.change_dir_timer == 0:
+            self.vx = random.randint(-6, -1)
+            self.vy = random.randint(-4, +4)
+            self.change_dir_timer = random.randint(30, 60) # 次の方向転換までの時間
+
+        self.rect.move_ip(self.vx, self.vy) # 移動処理
+
+        if self.rect.right < 0: # 画面外（左端）に出たら消滅
+            self.kill()
 
 def spawn_enemy(stage: int, tmr: int, emys: pg.sprite.Group):
     """
@@ -297,10 +333,10 @@ def spawn_enemy(stage: int, tmr: int, emys: pg.sprite.Group):
     if stage == 1:
         if tmr % interval == 0: # tmrがintervalの倍数のときに敵機をスポーンさせる
             emys.add(Enemy())
-        # ここにステージごとのスポーン条件を追加していく
-    # elif stage == 2:
-        #     if tmr % 15
-        #         emys.add(EnemyX())
+        #ここにステージごとのスポーン条件を追加していく
+    elif stage == 2:
+            if tmr % interval == 0:
+                emys.add(Enemy2())
 
 class Score:
     """
@@ -439,6 +475,10 @@ def main():
             if emy.state == "stop" and tmr%emy.interval == 0:
                 # 敵機が停止状態に入ったら，intervalに応じて爆弾投下
                 bombs.add(Bomb(emy, bird))
+            
+            elif isinstance(emy, Enemy2):
+                if tmr % emy.interval == 0:
+                    bombs.add(Bomb(emy, bird))
 
         for emy in pg.sprite.spritecollide(bird, emys, False):
             emy.hp -= 1
