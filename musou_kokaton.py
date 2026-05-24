@@ -8,7 +8,7 @@ import pygame as pg
 
 WIDTH = 1100  # ゲームウィンドウの幅
 HEIGHT = 650  # ゲームウィンドウの高さ
-backgroundImg = ["fig/pg_bg.jpg","fig/starnight3.jpg","fig/pg_bg3.jpg","fig/pg_bg4.jpg","fig/pg_bg5.jpg"] #1,2,3,4,5
+backgroundImg = ["fig/pg_bg.jpg","fig/nightsky01.png","fig/pg_bg3.jpg","fig/pg_bg4.jpg","fig/pg_bg5.jpg"] #1,2,3,4,5
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -307,10 +307,16 @@ class Enemy2(pg.sprite.Sprite):
 
     def update(self):
         """
-        敵機を速度ベクトルself.vxに基づき移動（左移動）させる
-        ランダムに決めた停止位置_boundまで左移動したら，_stateを停止状態に変更する
-        引数 screen：画面Surface
+        敵が上下の画面外に出ないようにする。
+        敵を不規則に動かす。
         """
+        if self.rect.top < 0: #画面の上側に出そうになったとき押し戻す
+            self.rect.top = 0
+            self.vy *= -1
+        if self.rect.bottom > HEIGHT: #画面の下側に出そうになったとき押し戻す
+            self.rect.bottom= HEIGHT
+            self.vy *= -1
+
         self.change_dir_timer -= 1 # 毎フレームタイマーを減らす
         
         # タイマーが0になったら、新しい速度をランダムに決めてタイマーをリセット
@@ -394,7 +400,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
-    life = Life(3)
+    life = Life(5)
     items = pg.sprite.Group()
 
     stage = 1
