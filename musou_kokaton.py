@@ -383,6 +383,37 @@ class EnemyLV5_Boss(pg.sprite.Sprite):
         if self.rect.centerx < self.bound:
             self.vx = 2
             self.state = "stop"
+class LV1_Boss(pg.sprite.Sprite):
+    """
+    ステージ1のボスに関するクラス
+    """
+    imgs = [pg.image.load(f"fig/fukuro1.png")]
+    def __init__(self):
+            super().__init__()
+            # 2倍の大きさに
+            self.image = pg.transform.rotozoom(random.choice(__class__.imgs), 0, 2.0)
+            self.rect = self.image.get_rect()
+            self.rect.center = WIDTH + self.rect.width // 2, HEIGHT // 2 #画面中央の高さ
+            self.vx, self.vy = -3, 0
+            self.bound = WIDTH - 200 #画面右側でストップ
+            self.state = "left"  
+            self.interval = 40
+            self.hp = 5         #ボスの体力
+            self.move_dir = 1     
+            self.base_speed = 4
+
+    def update(self):
+        if self.rect.centerx < self.bound:
+            self.vx = 0
+            self.state = "stop"
+        if self.state == "stop":
+            self.vy = self.base_speed * self.move_dir            
+            if self.rect.top < 50:
+                self.move_dir = 1
+            elif self.rect.bottom > HEIGHT - 50:
+                self.move_dir = -1
+        else:
+            self.vy = 0
         self.rect.move_ip(self.vx, self.vy)
 
 
@@ -394,8 +425,12 @@ def spawn_enemy(stage: int, tmr: int, emys: pg.sprite.Group):
     """
     interval = max(60, 200 - (stage - 1) * 20)
     if stage == 1:
-        if tmr % interval == 0: # tmrがintervalの倍数のときに敵機をスポーンさせる
-            emys.add(Enemy())
+        if not any(isinstance(enemy, LV1_Boss) for enemy in emys): # ステージ5ではBossが出現している間は他の敵機をスポーンさせない
+            if tmr % interval == 0: # tmrがintervalの倍数のときに敵機をスポーンさせる
+                emys.add(Enemy())
+            elif tmr == 500:            # タイマーがちょうど500になった瞬間にボスを1体だけ出す
+                emys.add(LV1_Boss())         
+
         # ここにステージごとのスポーン条件を追加していく
     elif stage == 5:
         if not any(isinstance(enemy, EnemyLV5_Boss) for enemy in emys): # ステージ5ではBossが出現している間は他の敵機をスポーンさせない
@@ -407,6 +442,15 @@ def spawn_enemy(stage: int, tmr: int, emys: pg.sprite.Group):
         if tmr > 0 and tmr % (interval * 10) == 0: # ステージ5ではさらに強い敵機を出現させる
             emys.add(EnemyLV5_Boss())
 
+            if tmr < 500:              # タイマーが500未満の時はザコ敵を一定周期で出す
+                if tmr % interval == 0: 
+                    emys.add(Enemy())
+            elif tmr == 500:            # タイマーがちょうど500になった瞬間にボスを1体だけ出す
+                emys.add(LV1_Boss())        
+    # ここにステージごとのスポーン条件を追加していく
+    # elif stage == 2:
+        #     if tmr % 15
+        #         emys.add(EnemyX())
 
 class Score:
     """
@@ -456,7 +500,7 @@ class Life:
 def main():
     pg.display.set_caption("真！こうかとん無双")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
-    bg_imgs = [pg.image.load(path).convert() for path in backgroundImg]
+    bg_imgs = [pg.image.load(img_path).convert() for img_path in backgroundImg]    
     score = Score()
 
     bird = Bird(3, (900, 400))
@@ -467,19 +511,35 @@ def main():
     life = Life(3)
     items = pg.sprite.Group()
 
-    stage = 4
+    stage = 1
     scroll = 2
-    stage_clear = True
+    stage_clear = False
     stage_title_life = 0
     bg_x = 0
 
     snd005exp = pg.mixer.Sound("fig/exp005.mp3")
     pg.mixer.music.load("fig/bgm005.mp3")
+    stage_clear = False
+    stage_title_life = 60
+    bg_x = 0
     tmr = 0
+    has_rapid_skill = False
+
     clock = pg.time.Clock()
     pg.mixer.music.play(-1)
+    bgm_files = ["soundbgm1.mp3"] 
+    #ステージのBGMを再生
+    pg.mixer.music.load(bgm_files[0])
+    pg.mixer.music.play(-1)
+    pg.mixer.music.set_volume(0.5)  
+
     while True:
         key_lst = pg.key.get_pressed()
+        if not stage_clear and has_rapid_skill and key_lst[pg.K_f] and score.value > 0:
+            if tmr % 4 == 0:  # 4フレームに1発発射
+                beams.add(Beam(bird, stage))
+                score.value -= 1  # スコアを1消費
+                        
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
@@ -499,6 +559,37 @@ def main():
                     item.rect.x -= 120
                 bg_x = 0
                 continue
+            if stage_clear and event.type == pg.KEYDOWN:
+                if event.key == pg.K_q:  # Qキーなら回復
+                    life.num = min(life.num + 1, 5)
+                    score.value += 50
+                    stage += 1
+                    stage_clear = False
+                    stage_title_life = 60
+                    bird.rect.center = (900, 400)
+                    for emy in emys:
+                        emy.rect.x -= 120
+                    for item in items:
+                        item.rect.x -= 120
+                    scroll = 2 
+                    tmr = 0     
+                    bg_x = 0
+                    continue
+                
+                elif event.key == pg.K_f:  # ★追加：Eキーなら連射スキル解放して次へ
+                    has_rapid_skill = True  # 連射スキルを使えるようにする
+                    score.value += 50
+                    stage += 1
+                    stage_clear = False
+                    stage_title_life = 60
+                    bird.rect.center = (900, 400)
+                    for emy in emys: emy.rect.x -= 120
+                    for item in items: item.rect.x -= 120
+                    scroll = 2 
+                    tmr = 0     
+                    bg_x = 0
+                    continue
+
 
             if stage_clear and event.type == pg.KEYDOWN and event.key == pg.K_e:
                 if stage >= 5:
@@ -538,7 +629,13 @@ def main():
             overlay.fill((0, 0, 0, 160))
             screen.blit(overlay, (0, 0))
             font = pg.font.Font(None, 54)
-            if stage < 5:
+            if stage == 1:
+                lines = [
+                    f"STAGE {stage} CLEAR",
+                    "Press Q to heal or ",
+                    "Press F to Hyper Rapid Fire then continue",
+                ]
+            elif stage < 5:
                 lines = [
                 f"STAGE {stage} CLEAR",
                 "Press Q to heal or Press E to speed up then continue",
@@ -564,15 +661,15 @@ def main():
             rect = img.get_rect(center=(WIDTH // 2, 50))
             screen.blit(img, rect)
             stage_title_life -= 1
-        
+
 
         spawn_enemy(stage, tmr, emys)
+        if tmr == 500:
+            scroll = 0
+
         if tmr%260 == 0:
             items.add(Item())
-
-        if bird.rect.left <= 0:
-            stage_clear = True
-
+            
         for emy in emys:
             if emy.state == "stop" and tmr%emy.interval == 0:
                 # 敵機が停止状態に入ったら，intervalに応じて爆弾投下
@@ -586,7 +683,7 @@ def main():
                 score.value += 10
             life.num -= 1
             if stage != 5:
-                bird.change_img(8, screen)
+                bird.change_img(8, screen, stage)
             score.update(screen)
             life.update(screen)
             pg.display.update()
@@ -625,6 +722,14 @@ def main():
                 exps.add(Explosion(emy, 100))  # 爆発エフェクト
                 score.value += 10  # 10点アップ
                 bird.change_img(6, screen, stage)  # こうかとん喜びエフェクト
+                #bird.change_img(6, screen)  # こうかとん喜びエフェクト
+
+                if isinstance(emy, LV1_Boss):
+                    score.value += 100  # ボス撃破ボーナス
+                    stage_clear = True
+                else:
+                    score.value += 10   # 通常の敵
+
 
         for bomb in pg.sprite.groupcollide(bombs, beams, True, True).keys():  # ビームと衝突した爆弾リスト
             snd005exp.play()  # 爆発音を再生
@@ -641,7 +746,7 @@ def main():
                 if bomb.state == "active": 
                     life.num-=1 #　衝突したらライフが一つ減る
                     if stage != 5:
-                        bird.change_img(8, screen)  # こうかとん悲しみエフェクト
+                        bird.change_img(8, screen, stage)  # こうかとん悲しみエフェクト
                     score.update(screen)
                     life.update(screen)
                     pg.display.update()
@@ -652,6 +757,10 @@ def main():
         if tmr % 1800 == 0 and tmr > 0 and stage < 5: # 一定時間ごとにステージクリア
             stage_clear = True
         bird.update(key_lst, screen, score, stage)
+        #if tmr % 1800 == 0 and tmr > 0:
+            #stage_clear = True
+
+        #bird.update(key_lst, screen, score)
         beams.update()
         beams.draw(screen)
         emys.update()
